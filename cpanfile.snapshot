@@ -1,0 +1,16 @@
+# carton snapshot format: version 1.0
+DISTRIBUTIONS
+  Parallel-ForkManager-1.17
+    pathname: Y/YA/YANICK/Parallel-ForkManager-1.17.tar.gz
+    provides:
+      Parallel::ForkManager 1.17
+    requirements:
+      Carp 0
+      ExtUtils::MakeMaker 0
+      File::Path 0
+      File::Spec 0
+      File::Temp 0
+      POSIX 0
+      Storable 0
+      perl 5.006
+      strict 0
