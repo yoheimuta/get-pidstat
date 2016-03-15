@@ -161,7 +161,8 @@ sub write_ret {
         or die "failed to open: $!";
 
     for my $metric (keys %$ret) {
-        print $new_file join (",", $t->epoch, $name, $metric, $ret->{$metric});
+        # datetime は目視確認用に追加
+        print $new_file join (",", $t->datetime, $t->epoch, $name, $metric, $ret->{$metric});
         print $new_file "\n";
     }
     close($new_file);
