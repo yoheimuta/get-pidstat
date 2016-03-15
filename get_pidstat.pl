@@ -4,7 +4,7 @@
 
 =head1 SYNOPSIS
 
-    $ perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log
+    $ perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --dry_run=0
 
 =cut
 package GetPidStat;
@@ -41,6 +41,7 @@ sub new_with_options {
         \my %opt, qw/
           pid_dir|p=s
           res_file|r=s
+          dry_run|r=s
           /
     );
     my $self = $class->new(%opt);
@@ -51,7 +52,7 @@ sub run {
     my $self = shift;
 
     # pid ファイルの検索を 5 秒後に行う
-    # sleep $sleep_sec;
+    sleep $sleep_sec unless $self->{dry_run};
 
     opendir my $pid_dir, $self->{pid_dir}
         or die "failed to opendir: $!";
@@ -96,7 +97,7 @@ sub run {
         }
 
         open my $pid_file, '<', $self->{pid_dir} . "/$cmd_name"
-            or die "failed to open: $!";
+            or die "failed to open: pid=$$, err=$!";
         chomp(my $pid = <$pid_file>);
         close $pid_file;
 
@@ -104,7 +105,7 @@ sub run {
 
         my $ret_pidstat = $self->get_pidstat($pid, $metric_name);
         unless ($ret_pidstat && %$ret_pidstat) {
-            die "failed getting pidstat: pid=$pid,
+            die "failed getting pidstat: pid=$$, target_pid=$pid,
                 cmd_name=$cmd_name, metric_name=$metric_name";
         }
 
@@ -115,11 +116,16 @@ sub run {
 
 sub get_pidstat {
     my ($self, $pid, $metric_name) = @_;
-    my $command = "sleep 2; cat ./source/$metric_name.txt";
-    # my $flag = $metric_param->{$metric_name}->{flag};
-    # my $command = "pidstat $flag -p $pid 1 $run_sec";
+    my $command = do {
+        if ($self->{dry_run}) {
+            "sleep 2; cat ./source/$metric_name.txt";
+        } else {
+            my $flag = $metric_param->{$metric_name}->{flag};
+            "pidstat $flag -p $pid 1 $run_sec";
+        }
+    };
     my $output = `$command`;
-    die "failed command: $command" unless $output;
+    die "failed command: $command, pid=$$" unless $output;
 
     my @lines = split '\n', $output;
     return $self->_parse_ret(\@lines, $metric_name);
