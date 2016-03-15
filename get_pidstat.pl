@@ -27,6 +27,8 @@ my $metric_param = {
         column_num   => 7,
     },
 };
+my $sleep_sec = 5;
+my $run_sec   = 60 - $sleep_sec;
 
 sub new {
     my ( $class, %opt ) = @_;
@@ -47,6 +49,9 @@ sub new_with_options {
 
 sub run {
     my $self = shift;
+
+    # pid ファイルの検索を 5 秒後に行う
+    # sleep $sleep_sec;
 
     opendir my $pid_dir, $self->{pid_dir}
         or die "failed to opendir: $!";
@@ -112,7 +117,7 @@ sub get_pidstat {
     my ($self, $pid, $metric_name) = @_;
     my $command = "sleep 2; cat ./source/$metric_name.txt";
     # my $flag = $metric_param->{$metric_name}->{flag};
-    # my $command = "pidstat $flag -p $pid 1 60";
+    # my $command = "pidstat $flag -p $pid 1 $run_sec";
     my $output = `$command`;
     die "failed command: $command" unless $output;
 
