@@ -125,19 +125,24 @@ sub _parse_ret {
 
     my $p = $metric_param->{$metric_name};
 
-    my $average;
+    my @metrics;
     for (@$lines) {
         my @num = split " ";
         #print "$_," for @num;
         #print "\n";
         next unless @num == $p->{column_total};
-        next unless $num[0] eq 'Average:';
 
-        my $cpu = $num[$p->{column_num}];
-        next unless $cpu =~ /^[0-9.]+$/;
-        $average = $cpu;
+        my $m = $num[$p->{column_num}];
+        next unless $m =~ /^[0-9.]+$/;
+        push @metrics, $m;
     }
-    return unless $average;
+    return unless @metrics;
+
+    my $average = do {
+        my $sum = 0;
+        $sum += $_ for @metrics;
+        sprintf '%.2f', $sum / (scalar @metrics);
+    };
 
     my $ret = {
         $metric_name => $average,
