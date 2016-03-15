@@ -4,7 +4,7 @@
 
 =head1 SYNOPSIS
 
-    $ perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --dry_run=0
+    $ perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0
 
 =cut
 package GetPidStat;
@@ -28,7 +28,6 @@ my $metric_param = {
     },
 };
 my $sleep_sec = 5;
-my $run_sec   = 60 - $sleep_sec;
 
 sub new {
     my ( $class, %opt ) = @_;
@@ -37,10 +36,14 @@ sub new {
 
 sub new_with_options {
     my $class = shift;
+    my %opt = (pid_dir => './pid', res_file => './res/bstat.log',
+        interval => '60', dry_run => '1');
+
     GetOptions(
-        \my %opt, qw/
+        \%opt, qw/
           pid_dir|p=s
           res_file|r=s
+          interval|r=s
           dry_run|r=s
           /
     );
@@ -55,7 +58,7 @@ sub run {
     sleep $sleep_sec unless $self->{dry_run};
 
     opendir my $pid_dir, $self->{pid_dir}
-        or die "failed to opendir: $!";
+        or die "failed to opendir:$!, name=" . $self->{pid_dir};
 
     my @pid_files;
     foreach(readdir $pid_dir){
@@ -121,6 +124,7 @@ sub get_pidstat {
             "sleep 2; cat ./source/$metric_name.txt";
         } else {
             my $flag = $metric_param->{$metric_name}->{flag};
+            my $run_sec = $self->{interval} - $sleep_sec;
             "pidstat $flag -p $pid 1 $run_sec";
         }
     };
