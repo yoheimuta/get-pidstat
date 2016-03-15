@@ -168,7 +168,7 @@ sub _parse_ret {
 sub write_ret {
     my ($self, $name, $ret) = @_;
     open(my $new_file, '>>', $self->{res_file})
-        or die "failed to open: $!";
+        or die "failed to open:$!, name=" . $self->{res_file};
 
     for my $metric (keys %$ret) {
         # datetime は目視確認用に追加
