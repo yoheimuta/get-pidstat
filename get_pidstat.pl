@@ -67,7 +67,7 @@ sub run {
     }
     closedir($pid_dir);
 
-    die "empty pid_dir" unless @pid_files;
+    die "empty pid_dir: " . $self->{pid_dir} unless @pid_files;
 
     my @loop;
     for my $metric_name (keys %$metric_param) {
@@ -79,11 +79,13 @@ sub run {
         }
     }
 
+    my $ret_pidstats;
+
     my $pm = Parallel::ForkManager->new(scalar @loop);
     $pm->run_on_finish(sub {
         if (my $ret = $_[5]) {
             my ($cmd_name, $ret_pidstat) = @$ret;
-            $self->write_ret($cmd_name, $ret_pidstat);
+            push @{$ret_pidstats->{$cmd_name}}, $ret_pidstat;
         } else {
             print "failed to collect metrics\n";
         }
@@ -94,8 +96,9 @@ sub run {
         my $metric_name = $names->{metric};
         my $cmd_name    = $names->{cmd};
 
-        if (my $pid = $pm->start) {
-            print "pid=$pid, metric_name=$metric_name, cmd_name=$cmd_name\n";
+        if (my $child_pid = $pm->start) {
+            printf "child_pid=%d, metric_name=%s, cmd_name=%s\n",
+                $child_pid, $metric_name, $cmd_name;
             next METHODS;
         }
 
@@ -115,6 +118,8 @@ sub run {
         $pm->finish(0, [$cmd_name, $ret_pidstat]);
     }
     $pm->wait_all_children;
+
+    $self->write_ret($ret_pidstats);
 }
 
 sub get_pidstat {
@@ -166,14 +171,26 @@ sub _parse_ret {
 }
 
 sub write_ret {
-    my ($self, $name, $ret) = @_;
+    my ($self, $ret_pidstats) = @_;
     open(my $new_file, '>>', $self->{res_file})
         or die "failed to open:$!, name=" . $self->{res_file};
 
-    for my $metric (keys %$ret) {
-        # datetime は目視確認用に追加
-        print $new_file join (",", $t->datetime, $t->epoch, $name, $metric, $ret->{$metric});
-        print $new_file "\n";
+    my $summary;
+    for my $cmd_name (keys %$ret_pidstats) {
+        for my $ret (@{$ret_pidstats->{$cmd_name}}) {
+            for my $mname (keys %$ret) {
+                $summary->{$cmd_name}->{$mname} += $ret->{$mname};
+            }
+        }
+    }
+
+    for my $cmd_name (keys %$summary) {
+        my $s = $summary->{$cmd_name};
+        for my $mname (keys %$s) {
+            # datetime は目視確認用に追加
+            print $new_file join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $s->{$mname});
+            print $new_file "\n";
+        }
     }
     close($new_file);
 }

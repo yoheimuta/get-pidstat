@@ -1,5 +1,5 @@
 Linux 3.13.0-36-generic (ip-10-0-1-176)         03/14/2016      _x86_64_        (1 CPU)
 
 09:46:16 PM   UID       PID    %usr %system  %guest    %CPU   CPU  Command
-09:46:17 PM     0      7473    0.00    0.00    0.00    12.00     0  node
+09:46:17 PM     0      7473    0.00    0.00    0.00    12.02     0  node
 09:46:18 PM     0      7473    0.00    0.00    0.00    0.00     0  node
