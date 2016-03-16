@@ -63,19 +63,36 @@ sub run {
     my @pid_files;
     foreach(readdir $pid_dir){
         next if /^\.{1,2}$/;
-        push @pid_files, $_;
+
+        my $path = $self->{pid_dir} . "/$_";
+        my $ok = open my $pid_file, '<', $path;
+        unless ($ok) {
+            print "failed to open: err=$!, path=$path\n";
+            next;
+        }
+        chomp(my $pid = <$pid_file>);
+        close $pid_file;
+
+        unless ($pid =~ /^[0-9]+$/) {
+            print "invalid pid: value=$pid\n";
+            next;
+        }
+        push @pid_files, { $_ => $pid };
     }
     closedir($pid_dir);
 
-    die "empty pid_dir: " . $self->{pid_dir} unless @pid_files;
+    die "not found pids in pid_dir: " . $self->{pid_dir} unless @pid_files;
 
     my @loop;
     for my $metric_name (keys %$metric_param) {
-        for my $cmd_name (@pid_files) {
-            push @loop, {
-                metric => $metric_name,
-                cmd    => $cmd_name,
-            };
+        for my $info (@pid_files) {
+            for my $cmd_name (keys %$info) {
+                push @loop, {
+                    metric => $metric_name,
+                    cmd    => $cmd_name,
+                    pid    => $info->{$cmd_name},
+                };
+            }
         }
     }
 
@@ -92,22 +109,16 @@ sub run {
     });
 
     METHODS:
-    for my $names (@loop) {
-        my $metric_name = $names->{metric};
-        my $cmd_name    = $names->{cmd};
+    for my $info (@loop) {
+        my $metric_name = $info->{metric};
+        my $cmd_name    = $info->{cmd};
+        my $pid         = $info->{pid};
 
         if (my $child_pid = $pm->start) {
-            printf "child_pid=%d, metric_name=%s, cmd_name=%s\n",
-                $child_pid, $metric_name, $cmd_name;
+            printf "child_pid=%d, metric_name=%s, cmd_name=%s, target_pid=%d\n",
+                $child_pid, $metric_name, $cmd_name, $pid;
             next METHODS;
         }
-
-        open my $pid_file, '<', $self->{pid_dir} . "/$cmd_name"
-            or die "failed to open: pid=$$, err=$!";
-        chomp(my $pid = <$pid_file>);
-        close $pid_file;
-
-        die "invalid pid" unless $pid =~ /^[0-9]+$/;
 
         my $ret_pidstat = $self->get_pidstat($pid, $metric_name);
         unless ($ret_pidstat && %$ret_pidstat) {
