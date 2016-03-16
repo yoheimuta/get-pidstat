@@ -18,13 +18,13 @@ my $t = localtime;
 my $metric_param = {
     cpu => {
         flag         => '-u',
-        column_total => 9,
-        column_num   => 6,
+        column_total => 10,
+        column_num   => 7,
     },
     memory => {
         flag         => '-r',
-        column_total => 9,
-        column_num   => 7,
+        column_total => 10,
+        column_num   => 8,
     },
 };
 my $sleep_sec = 5;
