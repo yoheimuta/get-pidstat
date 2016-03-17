@@ -86,11 +86,11 @@ sub run {
     my @loop;
     for my $metric_name (keys %$metric_param) {
         for my $info (@pid_files) {
-            for my $cmd_name (keys %$info) {
+            while (my ($cmd_name, $pid) = each %$info) {
                 push @loop, {
                     metric => $metric_name,
                     cmd    => $cmd_name,
-                    pid    => $info->{$cmd_name},
+                    pid    => $pid,
                 };
             }
         }
@@ -187,19 +187,18 @@ sub write_ret {
         or die "failed to open:$!, name=" . $self->{res_file};
 
     my $summary;
-    for my $cmd_name (keys %$ret_pidstats) {
-        for my $ret (@{$ret_pidstats->{$cmd_name}}) {
-            for my $mname (keys %$ret) {
-                $summary->{$cmd_name}->{$mname} += $ret->{$mname};
+    while (my ($cmd_name, $rets) = each %$ret_pidstats) {
+        for my $ret (@{$rets}) {
+            while (my ($mname, $mvalue) = each %$ret) {
+                $summary->{$cmd_name}->{$mname} += $mvalue;
             }
         }
     }
 
-    for my $cmd_name (keys %$summary) {
-        my $s = $summary->{$cmd_name};
-        for my $mname (keys %$s) {
+    while (my ($cmd_name, $s) = each %$summary) {
+        while (my ($mname, $mvalue) = each %$s) {
             # datetime は目視確認用に追加
-            print $new_file join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $s->{$mname});
+            print $new_file join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $mvalue);
             print $new_file "\n";
         }
     }
