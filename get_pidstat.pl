@@ -4,7 +4,7 @@
 
 =head1 SYNOPSIS
 
-    $ perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0
+    $ carton exec -- perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0 --include_child=1
 
 =cut
 package GetPidStat;
@@ -37,7 +37,7 @@ sub new {
 sub new_with_options {
     my $class = shift;
     my %opt = (pid_dir => './pid', res_file => './res/bstat.log',
-        interval => '60', dry_run => '1');
+        interval => '60', dry_run => '1', include_child => '1');
 
     GetOptions(
         \%opt, qw/
@@ -45,6 +45,7 @@ sub new_with_options {
           res_file|r=s
           interval|r=s
           dry_run|r=s
+          include_child|r=s
           /
     );
     my $self = $class->new(%opt);
@@ -82,6 +83,8 @@ sub run {
     closedir($pid_dir);
 
     die "not found pids in pid_dir: " . $self->{pid_dir} unless @pid_files;
+
+    $self->include_child_pids(\@pid_files) if $self->{include_child};
 
     my @loop;
     for my $metric_name (keys %$metric_param) {
@@ -131,6 +134,42 @@ sub run {
     $pm->wait_all_children;
 
     $self->write_ret($ret_pidstats);
+}
+
+sub include_child_pids {
+    my ($self, $pid_files) = @_;
+
+    my @append_files;
+    for my $info (@$pid_files) {
+        while (my ($cmd_name, $pid) = each %$info) {
+            my $child_pids = $self->_search_child_pids($pid);
+            for my $child_pid (@$child_pids) {
+                unless ($child_pid =~ /^[0-9]+$/) {
+                    print "invalid child_pid: value=$child_pid\n";
+                    next;
+                }
+                push @append_files, { $cmd_name => $child_pid };
+            }
+        }
+    }
+
+    push @$pid_files, @append_files;
+}
+
+sub _search_child_pids {
+    my ($self, $pid) = @_;
+    my $command = do {
+        if ($self->{dry_run}) {
+            "cat ./source/pstree_$pid.txt";
+        } else {
+            "pstree -pn $pid |grep -o '([[:digit:]]*)' |grep -o '[[:digit:]]*'";
+        }
+    };
+    my $output = `$command`;
+    return [] unless $output;
+
+    chomp(my @child_pids = split '\n', $output);
+    return \@child_pids;
 }
 
 sub get_pidstat {
