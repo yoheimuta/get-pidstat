@@ -6,6 +6,10 @@
 
     $ carton exec -- perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0 --include_child=1
 
+=head1 CAUTION
+
+C<interval> must be longer than 5.
+
 =cut
 package GetPidStat;
 use strict;
