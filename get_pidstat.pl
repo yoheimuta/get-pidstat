@@ -173,7 +173,7 @@ sub _search_child_pids {
     return [] unless $output;
 
     chomp(my @child_pids = split '\n', $output);
-    return \@child_pids;
+    return [grep { $_ != $pid } @child_pids];
 }
 
 sub get_pidstat {
@@ -210,7 +210,11 @@ sub _parse_ret {
         next unless $m =~ /^[0-9.]+$/;
         push @metrics, $m;
     }
-    return unless @metrics;
+    unless (@metrics) {
+        printf "empty metrics: metric_name=%s, lines=%s\n",
+            $metric_name, join ',', @$lines;
+        return;
+    }
 
     my $average = do {
         my $sum = 0;
