@@ -6,10 +6,6 @@
 
     $ carton exec -- perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0 --include_child=1
 
-=head1 CAUTION
-
-C<interval> must be longer than 5.
-
 =cut
 package GetPidStat;
 use strict;
@@ -31,7 +27,6 @@ my $metric_param = {
         column_num   => 8,
     },
 };
-my $sleep_sec = 5;
 
 sub new {
     my ( $class, %opt ) = @_;
@@ -58,9 +53,6 @@ sub new_with_options {
 
 sub run {
     my $self = shift;
-
-    # pid ファイルの検索を 5 秒後に行う
-    sleep $sleep_sec unless $self->{dry_run};
 
     opendir my $pid_dir, $self->{pid_dir}
         or die "failed to opendir:$!, name=" . $self->{pid_dir};
@@ -183,7 +175,7 @@ sub get_pidstat {
             "sleep 2; cat ./source/$metric_name.txt";
         } else {
             my $flag = $metric_param->{$metric_name}->{flag};
-            my $run_sec = $self->{interval} - $sleep_sec;
+            my $run_sec = $self->{interval};
             "pidstat $flag -p $pid 1 $run_sec";
         }
     };
