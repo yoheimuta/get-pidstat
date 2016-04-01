@@ -4,7 +4,7 @@
 
 =head1 SYNOPSIS
 
-    $ carton exec -- perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0 --include_child=1
+    $ carton exec -- perl ./get_pidstat.pl --pid_dir=./pid --res_file=./res/bstat.log --interval=60 --dry_run=0 --include_child=1 --mackerel_api_key=xxx --mackerel_service_name=xxx
 
 =cut
 package GetPidStat;
@@ -13,6 +13,7 @@ use warnings;
 use Time::Piece;
 use Getopt::Long qw/:config posix_default no_ignore_case bundling auto_help/;
 use Parallel::ForkManager;
+use WebService::Mackerel;
 
 my $t = localtime;
 my $metric_param = {
@@ -45,6 +46,8 @@ sub new_with_options {
           interval|r=s
           dry_run|r=s
           include_child|r=s
+          mackerel_api_key|r=s
+          mackerel_service_name|r=s
           /
     );
     my $self = $class->new(%opt);
@@ -239,9 +242,29 @@ sub write_ret {
             # datetime は目視確認用に追加
             print $new_file join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $mvalue);
             print $new_file "\n";
+
+            if ($self->{mackerel_api_key} && $self->{mackerel_service_name}) {
+                my $content = $self->_send_mackerel($cmd_name, $mname, $mvalue);
+                print "mackerel post: $content\n" if $self->{dry_run};
+            }
         }
     }
     close($new_file);
+}
+
+sub _send_mackerel {
+    my ($self, $cmd_name, $mname, $mvalue) = @_;
+    my $graph_name = "custom.batch_$mname.$cmd_name";
+
+    my $mackerel = WebService::Mackerel->new(
+        api_key      => $self->{mackerel_api_key},
+        service_name => $self->{mackerel_service_name},
+    );
+    return $mackerel->post_service_metrics([{
+        "name"  => $graph_name,
+        "time"  => $t->epoch,
+        "value" => $mvalue,
+    }]);
 }
 
 package main;
