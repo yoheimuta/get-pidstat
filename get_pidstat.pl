@@ -8,6 +8,7 @@
 
 =cut
 package GetPidStat;
+use 5.010;
 use strict;
 use warnings;
 use Time::Piece;
@@ -35,8 +36,8 @@ sub new {
 
 sub new_with_options {
     my $class = shift;
-    my %opt = (pid_dir => './pid', res_file => './res/bstat.log',
-        interval => '60', dry_run => '1', include_child => '1');
+    my %opt = (pid_dir => './pid', include_child => '1',
+        interval => '60', dry_run => '1');
 
     GetOptions(
         \%opt, qw/
@@ -66,14 +67,14 @@ sub run {
         my $path = $self->{pid_dir} . "/$_";
         my $ok = open my $pid_file, '<', $path;
         unless ($ok) {
-            print "failed to open: err=$!, path=$path\n";
+            say "failed to open: err=$!, path=$path";
             next;
         }
         chomp(my $pid = <$pid_file>);
         close $pid_file;
 
         unless ($pid =~ /^[0-9]+$/) {
-            print "invalid pid: value=$pid\n";
+            say "invalid pid: value=$pid";
             next;
         }
         push @pid_files, { $_ => $pid };
@@ -88,8 +89,8 @@ sub run {
     for my $info (@pid_files) {
         while (my ($cmd_name, $pid) = each %$info) {
             push @loop, {
-                cmd    => $cmd_name,
-                pid    => $pid,
+                cmd => $cmd_name,
+                pid => $pid,
             };
         }
     }
@@ -102,7 +103,7 @@ sub run {
             my ($cmd_name, $ret_pidstat) = @$ret;
             push @{$ret_pidstats->{$cmd_name}}, $ret_pidstat;
         } else {
-            print "failed to collect metrics\n";
+            say "failed to collect metrics";
         }
     });
 
@@ -138,7 +139,7 @@ sub include_child_pids {
             my $child_pids = $self->_search_child_pids($pid);
             for my $child_pid (@$child_pids) {
                 unless ($child_pid =~ /^[0-9]+$/) {
-                    print "invalid child_pid: value=$child_pid\n";
+                    say "invalid child_pid: value=$child_pid";
                     next;
                 }
                 push @append_files, { $cmd_name => $child_pid };
@@ -191,8 +192,7 @@ sub _parse_ret {
         my @metrics;
         for (@$lines) {
             my @num = split " ";
-            #print "$_," for @num;
-            #print "\n";
+            #say "$_," for @num;
             my $m = $num[$param->{column_num}];
             next unless $m;
             next unless $m =~ /^[0-9.]+$/;
@@ -218,8 +218,11 @@ sub _parse_ret {
 
 sub write_ret {
     my ($self, $ret_pidstats) = @_;
-    open(my $new_file, '>>', $self->{res_file})
-        or die "failed to open:$!, name=" . $self->{res_file};
+
+    my $new_file;
+    if (my $r = $self->{res_file}) {
+        open($new_file, '>>', $r) or die "failed to open:$!, name=$r";
+    }
 
     my $summary;
     while (my ($cmd_name, $rets) = each %$ret_pidstats) {
@@ -233,16 +236,20 @@ sub write_ret {
     while (my ($cmd_name, $s) = each %$summary) {
         while (my ($mname, $mvalue) = each %$s) {
             # datetime は目視確認用に追加
-            print $new_file join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $mvalue);
-            print $new_file "\n";
+            my $msg = join (",", $t->datetime, $t->epoch, $cmd_name, $mname, $mvalue);
+            if ($new_file) {
+                say $new_file $msg;
+            } elsif ($self->{dry_run}) {
+                say $msg;
+            }
 
             if ($self->{mackerel_api_key} && $self->{mackerel_service_name}) {
                 my $content = $self->_send_mackerel($cmd_name, $mname, $mvalue);
-                print "mackerel post: $content\n" if $self->{dry_run};
+                say "mackerel post: $content" if $self->{dry_run};
             }
         }
     }
-    close($new_file);
+    close($new_file) if $new_file;
 }
 
 sub _send_mackerel {
