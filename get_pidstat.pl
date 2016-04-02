@@ -18,14 +18,13 @@ use WebService::Mackerel;
 my $t = localtime;
 my $metric_param = {
     cpu => {
-        flag         => '-u',
-        column_total => 10,
-        column_num   => 7,
+        column_num   => 6,
     },
-    memory => {
-        flag         => '-r',
-        column_total => 10,
-        column_num   => 8,
+    memory_percent => {
+        column_num   => 12,
+    },
+    memory_rss => {
+        column_num   => 11,
     },
 };
 
@@ -86,15 +85,12 @@ sub run {
     $self->include_child_pids(\@pid_files) if $self->{include_child};
 
     my @loop;
-    for my $metric_name (keys %$metric_param) {
-        for my $info (@pid_files) {
-            while (my ($cmd_name, $pid) = each %$info) {
-                push @loop, {
-                    metric => $metric_name,
-                    cmd    => $cmd_name,
-                    pid    => $pid,
-                };
-            }
+    for my $info (@pid_files) {
+        while (my ($cmd_name, $pid) = each %$info) {
+            push @loop, {
+                cmd    => $cmd_name,
+                pid    => $pid,
+            };
         }
     }
 
@@ -112,20 +108,18 @@ sub run {
 
     METHODS:
     for my $info (@loop) {
-        my $metric_name = $info->{metric};
         my $cmd_name    = $info->{cmd};
         my $pid         = $info->{pid};
 
         if (my $child_pid = $pm->start) {
-            printf "child_pid=%d, metric_name=%s, cmd_name=%s, target_pid=%d\n",
-                $child_pid, $metric_name, $cmd_name, $pid;
+            printf "child_pid=%d, cmd_name=%s, target_pid=%d\n",
+                $child_pid, $cmd_name, $pid;
             next METHODS;
         }
 
-        my $ret_pidstat = $self->get_pidstat($pid, $metric_name);
+        my $ret_pidstat = $self->get_pidstat($pid);
         unless ($ret_pidstat && %$ret_pidstat) {
-            die "failed getting pidstat: pid=$$, target_pid=$pid,
-                cmd_name=$cmd_name, metric_name=$metric_name";
+            die "failed getting pidstat: pid=$$, target_pid=$pid, cmd_name=$cmd_name";
         }
 
         $pm->finish(0, [$cmd_name, $ret_pidstat]);
@@ -172,54 +166,53 @@ sub _search_child_pids {
 }
 
 sub get_pidstat {
-    my ($self, $pid, $metric_name) = @_;
+    my ($self, $pid) = @_;
     my $command = do {
         if ($self->{dry_run}) {
-            "sleep 2; cat ./source/$metric_name.txt";
+            "sleep 2; cat ./source/metric.txt";
         } else {
-            my $flag = $metric_param->{$metric_name}->{flag};
             my $run_sec = $self->{interval};
-            "pidstat $flag -p $pid 1 $run_sec";
+            "pidstat -h -u -r -p $pid 1 $run_sec";
         }
     };
     my $output = `$command`;
     die "failed command: $command, pid=$$" unless $output;
 
     my @lines = split '\n', $output;
-    return $self->_parse_ret(\@lines, $metric_name);
+    return $self->_parse_ret(\@lines);
 }
 
 sub _parse_ret {
-    my ($self, $lines, $metric_name) = @_;
+    my ($self, $lines) = @_;
 
-    my $p = $metric_param->{$metric_name};
+    my $ret;
 
-    my @metrics;
-    for (@$lines) {
-        my @num = split " ";
-        #print "$_," for @num;
-        #print "\n";
-        next unless @num == $p->{column_total};
+    while (my ($mname, $param) = each %$metric_param) {
+        my @metrics;
+        for (@$lines) {
+            my @num = split " ";
+            #print "$_," for @num;
+            #print "\n";
+            my $m = $num[$param->{column_num}];
+            next unless $m;
+            next unless $m =~ /^[0-9.]+$/;
+            push @metrics, $m;
+        }
+        unless (@metrics) {
+            printf "empty metrics: mname=%s, lines=%s\n",
+                $mname, join ',', @$lines;
+            next;
+        }
 
-        my $m = $num[$p->{column_num}];
-        next unless $m =~ /^[0-9.]+$/;
-        push @metrics, $m;
+        my $average = do {
+            my $sum = 0;
+            $sum += $_ for @metrics;
+            sprintf '%.2f', $sum / (scalar @metrics);
+        };
+
+        $ret->{$mname} = $average;
     }
-    unless (@metrics) {
-        printf "empty metrics: metric_name=%s, lines=%s\n",
-            $metric_name, join ',', @$lines;
-        return;
-    }
 
-    my $average = do {
-        my $sum = 0;
-        $sum += $_ for @metrics;
-        sprintf '%.2f', $sum / (scalar @metrics);
-    };
-
-    my $ret = {
-        $metric_name => $average,
-    };
     return $ret;
 }
 

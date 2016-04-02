@@ -66,7 +66,3 @@ $ tail -f /tmp/bstat.log
 2016-03-19T11:17:00,1458353820,mem_heavy_batch,cpu,1.05
 2016-03-19T11:17:00,1458353820,mem_heavy_batch,memory,20.59
 ```
-
-## TODO
-
-Support `pidstat -h` to refactor misc.
