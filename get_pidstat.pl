@@ -17,6 +17,7 @@ use Parallel::ForkManager;
 use WebService::Mackerel;
 
 my $t = localtime;
+my $convert_from_kilobytes = sub { my $raw = shift; return $raw * 1000 };
 my $metric_param = {
     cpu => {
         column_num   => 6,
@@ -26,6 +27,29 @@ my $metric_param = {
     },
     memory_rss => {
         column_num   => 11,
+        convert_func => $convert_from_kilobytes,
+    },
+    stk_size => {
+        column_num   => 13,
+        convert_func => $convert_from_kilobytes,
+    },
+    stk_ref => {
+        column_num   => 14,
+        convert_func => $convert_from_kilobytes,
+    },
+    disk_read_per_sec => {
+        column_num   => 15,
+        convert_func => $convert_from_kilobytes,
+    },
+    disk_write_per_sec => {
+        column_num   => 16,
+        convert_func => $convert_from_kilobytes,
+    },
+    cswch_per_sec => {
+        column_num   => 18,
+    },
+    nvcswch_per_sec => {
+        column_num   => 19,
     },
 };
 
@@ -173,7 +197,7 @@ sub get_pidstat {
             "sleep 2; cat ./source/metric.txt";
         } else {
             my $run_sec = $self->{interval};
-            "pidstat -h -u -r -p $pid 1 $run_sec";
+            "pidstat -h -u -r -s -d -w -p $pid 1 $run_sec";
         }
     };
     my $output = `$command`;
@@ -196,7 +220,11 @@ sub _parse_ret {
             my $m = $num[$param->{column_num}];
             next unless $m;
             next unless $m =~ /^[0-9.]+$/;
-            push @metrics, $m;
+            if (my $cf = $param->{convert_func}) {
+                push @metrics, $cf->($m);
+            } else {
+                push @metrics, $m;
+            }
         }
         unless (@metrics) {
             printf "empty metrics: mname=%s, lines=%s\n",
